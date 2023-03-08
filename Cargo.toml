@@ -1,0 +1,23 @@
+[package]
+name = "get_tag"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = { version = "0.4.23", features = ["serde"] }
+clap = { version = "4.0.32", features = ["derive"] }
+error-chain = "0.12.4"
+reqwest = { version = "0.11.13", features = ["blocking", "json"] }
+serde = { version = "1.0.152", features = ["derive"] }
+serde_json = { version = "1.0.91" }
+tokio = { version = "1.23.1", features = ["full"] }
+
+# https://www.aloxaf.com/2018/09/reduce_rust_size/
+[profile.release]
+opt-level = "z"
+lto = true
+panic = "abort"
+codegen-units = 1
+
