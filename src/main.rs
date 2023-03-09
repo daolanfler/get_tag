@@ -1,7 +1,8 @@
 use crate::harbor::*;
 use error_chain::error_chain;
-use reqwest::header::CONTENT_TYPE;
-use std::cmp;
+use reqwest::{header::CONTENT_TYPE, Client};
+use std::{cmp, collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 
 use clap::Parser;
 mod harbor;
@@ -14,10 +15,9 @@ struct Args {
     #[arg(short, long, default_value_t = String::from("smartwater"))]
     repo: String,
 
-    // TODO 支持多个 name
-    /// 需要获取的项目名称
-    #[arg(short, long, default_value_t = String::from("smart-water-web"))]
-    name: String,
+    /// 需要获取的项目名称, 可以多个
+    #[arg(short, long, num_args=0.., default_values_t = vec![String::from("smart-water-web"), String::from("smart-water-irrigated-web")])]
+    name: Vec<String>,
 
     /// 需要获取的最新多少个版本的镜像
     #[arg(short, long, default_value_t = 1)]
@@ -33,26 +33,67 @@ error_chain! {
 
 const HABOR_API: &'static str = "http://10.12.135.233/api";
 
-fn get_full_url(repo: &str, name: &str, detail: bool) -> String {
+fn get_full_url(repo: &str, name: &str) -> String {
     format!(
         "{url}/repositories/{repo}/{name}/tags?detail={detail}",
         url = HABOR_API,
         repo = repo,
         name = name,
-        detail = detail
+        detail = true
     )
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+    // println!("args: {:#?}", args);
 
-    // detail 为 false 则返回结果不同
-    let full_url = get_full_url(&args.repo, &args.name, true);
-    println!("Full url: {}\n", full_url);
+    let map: Arc<Mutex<HashMap<String, Vec<String>>>> = Arc::new(Mutex::new(HashMap::new()));
+
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()?;
+
+    let mut tasks = Vec::with_capacity(args.name.len());
+    for name in args.name {
+        tasks.push(tokio::spawn(make_request(
+            args.repo.clone(),
+            name.clone(),
+            args.count,
+            client.clone(),
+            map.clone(),
+        )));
+    }
+
+    for task in tasks {
+        match task.await {
+            Ok(_) => {}
+            Err(_) => {
+                panic!("tokio task error");
+            }
+        };
+    }
+
+    // println!("map is {:#?}", map);
+    // print map by key
+    let lock = map.lock().await;
+    for (key, value) in lock.iter() {
+        println!("\n{}:", key);
+        for s in value {
+            println!("  {}", s);
+        }
+    }
+    Ok(())
+}
+
+async fn make_request(
+    repo: String,
+    name: String,
+    count: usize,
+    client: Client,
+    map: Arc<Mutex<HashMap<String, Vec<String>>>>,
+) -> Result<()> {
+    let full_url = get_full_url(&repo, &name);
 
     let res = client
         .get(full_url)
@@ -67,17 +108,23 @@ async fn main() -> Result<()> {
             detail_list.sort_by_key(|detail| detail.push_time);
 
             detail_list.reverse();
-            let end_index = cmp::min(args.count, detail_list.len());
+            let end_index = cmp::min(count, detail_list.len());
             let required_list = detail_list[0..end_index].to_vec();
 
+            let mut label_list = vec![];
             for (index, detail) in required_list.iter().enumerate() {
                 let label = if index == 0 {
-                    "最新版本 tag".to_string()
+                    "newest".to_string()
                 } else {
-                    format!("倒数第 {} tag", index + 1)
+                    format!("No.{} ", index + 1)
                 };
-                println!("{}: {}/{} {}", label, args.repo, args.name, detail.name)
+
+                let s = format!("{:6}: {}/{} {}", label, repo, name, detail.name);
+
+                label_list.push(s);
             }
+            let mut lock = map.lock().await;
+            lock.insert(name, label_list);
         }
         reqwest::StatusCode::UNAUTHORIZED => {
             println!("UNAUTHORIZED");
