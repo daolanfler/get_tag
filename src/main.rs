@@ -1,4 +1,5 @@
 use crate::harbor::*;
+use chrono::Local;
 use error_chain::error_chain;
 use reqwest::{header::CONTENT_TYPE, Client};
 use std::{cmp, collections::HashMap, sync::Arc};
@@ -22,6 +23,10 @@ struct Args {
     /// 需要获取的最新多少个版本的镜像
     #[arg(short, long, default_value_t = 1)]
     count: usize,
+
+    /// 是否打印推送时间
+    #[arg(short, long, default_value_t = false)]
+    time: bool,
 }
 
 error_chain! {
@@ -45,7 +50,7 @@ fn get_full_url(repo: &str, name: &str) -> String {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let args = Arc::new(Args::parse());
     // println!("args: {:#?}", args);
 
     let map: Arc<Mutex<HashMap<String, Vec<String>>>> = Arc::new(Mutex::new(HashMap::new()));
@@ -55,11 +60,10 @@ async fn main() -> Result<()> {
         .build()?;
 
     let mut tasks = Vec::with_capacity(args.name.len());
-    for name in args.name {
+    for name in args.name.iter() {
         tasks.push(tokio::spawn(make_request(
-            args.repo.clone(),
+            args.clone(),
             name.clone(),
-            args.count,
             client.clone(),
             map.clone(),
         )));
@@ -87,13 +91,19 @@ async fn main() -> Result<()> {
 }
 
 async fn make_request(
-    repo: String,
+    // repo: String,
+    // name: String,
+    // count: usize,
+    args: Arc<Args>,
     name: String,
-    count: usize,
     client: Client,
     map: Arc<Mutex<HashMap<String, Vec<String>>>>,
 ) -> Result<()> {
-    let full_url = get_full_url(&repo, &name);
+    let count = args.count;
+    let repo = &args.repo;
+    let print_time = args.time;
+
+    let full_url = get_full_url(repo, &name);
 
     let res = client
         .get(full_url)
@@ -119,7 +129,23 @@ async fn make_request(
                     format!("No.{} ", index + 1)
                 };
 
-                let s = format!("{:6}: {}/{} {}", label, repo, name, detail.name);
+                let mut s = format!(
+                    "{:6}: {}/{} {}",
+                    label,
+                    repo,
+                    name,
+                    detail.name,
+                );
+                if print_time {
+                    s = format!(
+                        "{}  推送时间：{}",
+                        s,
+                        detail
+                            .push_time
+                            .with_timezone(&Local)
+                            .format("%Y-%m-%d %H:%M:%S")
+                    );
+                }
 
                 label_list.push(s);
             }
