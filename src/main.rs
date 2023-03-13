@@ -13,14 +13,14 @@ mod harbor;
 
 /// 获取 Harbor 仓库的镜像版本号
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = "从 harbor 获取项目的镜像版本号")]
+#[command(author="daolanfler", version, about, long_about = "从 harbor 获取项目的镜像版本号")]
 struct Args {
     /// harbor 中仓库的名称
     #[arg(short, long, default_value_t = String::from("smartwater"))]
     repo: String,
 
     /// 需要获取的项目名称, 可以多个
-    #[arg(short, long, num_args=0.., default_values_t = vec![String::from("smart-water-web"), String::from("smart-water-irrigated-web")])]
+    #[arg(short, long, num_args=0.., default_values_t = vec![String::from("smart-water-web"), String::from("smart-water-irrigated-web")], value_name="PROJECT_NAME")]
     names: Vec<String>,
 
     /// 需要获取的最新多少个版本的镜像
@@ -40,12 +40,12 @@ error_chain! {
     }
 }
 
-const HABOR_API: &'static str = "http://10.12.135.233/api";
+const HABOR_API_URL: &str = "http://10.12.135.233/api";
 
 fn get_full_url(repo: &str, name: &str) -> String {
     format!(
         "{url}/repositories/{repo}/{name}/tags?detail={detail}",
-        url = HABOR_API,
+        url = HABOR_API_URL,
         repo = repo,
         name = name,
         detail = true
@@ -65,6 +65,7 @@ async fn main() -> Result<()> {
 
     let mut tasks = Vec::with_capacity(args.names.len());
     for name in args.names.iter() {
+        // tokio spawn 的 future 会立即执行
         tasks.push(tokio::spawn(make_request(
             args.clone(),
             name.clone(),
@@ -80,9 +81,10 @@ async fn main() -> Result<()> {
         })?;
     }
 
-    // 打印
+    // println!("map is {:#?}", map);
+    // print map by key
     let lock = map.lock().unwrap();
-    for (key, tag_list) in lock.iter() {
+    for (key, value) in lock.iter() {
         println!("\n{}:", key);
         for s in tag_list {
             println!("  {}", s);
@@ -127,7 +129,7 @@ async fn make_request(
                     format!("No.{} ", index + 1)
                 };
 
-                let mut s = format!("{:6}: {}/{} {}", label, repo, name, detail.name,);
+                let mut s = format!("{:6}: {}/{} {}", label, repo, &name, detail.name,);
                 if print_time {
                     s = format!(
                         "{}  推送时间：{}",
@@ -151,6 +153,5 @@ async fn make_request(
             panic!("出现了未知错误")
         }
     }
-
     Ok(())
 }
