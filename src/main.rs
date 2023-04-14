@@ -1,3 +1,5 @@
+mod harbor;
+
 use crate::harbor::*;
 use chrono::Local;
 use error_chain::error_chain;
@@ -7,13 +9,16 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-
 use clap::Parser;
-mod harbor;
 
-/// 获取 Harbor 仓库的镜像版本号
+/// 获取镜像版本号
 #[derive(Parser, Debug)]
-#[command(author="daolanfler", version, about, long_about = "从 harbor 获取项目的镜像版本号")]
+#[command(
+    author = "daolanfler",
+    version,
+    long_about = "从 harbor 获取项目的镜像版本号",
+    // help_template = "{name} ({version}) by {author} {about} \n\n{usage}"
+)]
 struct Args {
     /// harbor 中仓库的名称
     #[arg(short, long, default_value_t = String::from("smartwater"))]
@@ -84,7 +89,7 @@ async fn main() -> Result<()> {
     // println!("map is {:#?}", map);
     // print map by key
     let lock = map.lock().unwrap();
-    for (key, value) in lock.iter() {
+    for (key, tag_list) in lock.iter() {
         println!("\n{}:", key);
         for s in tag_list {
             println!("  {}", s);
