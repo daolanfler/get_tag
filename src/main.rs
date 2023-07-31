@@ -2,8 +2,11 @@ use crate::harbor::*;
 use chrono::Local;
 use error_chain::error_chain;
 use reqwest::{header::CONTENT_TYPE, Client};
-use std::{cmp, collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use std::{
+    cmp,
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use clap::Parser;
 mod harbor;
@@ -18,7 +21,7 @@ struct Args {
 
     /// 需要获取的项目名称, 可以多个
     #[arg(short, long, num_args=0.., default_values_t = vec![String::from("smart-water-web"), String::from("smart-water-irrigated-web")])]
-    name: Vec<String>,
+    names: Vec<String>,
 
     /// 需要获取的最新多少个版本的镜像
     #[arg(short, long, default_value_t = 1)]
@@ -33,6 +36,7 @@ error_chain! {
     foreign_links {
         Io(std::io::Error);
         HttpRequest(reqwest::Error);
+        JoinError(tokio::task::JoinError);
     }
 }
 
@@ -59,8 +63,8 @@ async fn main() -> Result<()> {
         .danger_accept_invalid_certs(true)
         .build()?;
 
-    let mut tasks = Vec::with_capacity(args.name.len());
-    for name in args.name.iter() {
+    let mut tasks = Vec::with_capacity(args.names.len());
+    for name in args.names.iter() {
         tasks.push(tokio::spawn(make_request(
             args.clone(),
             name.clone(),
@@ -70,20 +74,17 @@ async fn main() -> Result<()> {
     }
 
     for task in tasks {
-        match task.await {
-            Ok(_) => {}
-            Err(_) => {
-                panic!("tokio task error");
-            }
-        };
+        task.await.map_err(|e| dbg!(e))?.map_err(|e| {
+            println!("shit happend");
+            return e;
+        })?;
     }
 
-    // println!("map is {:#?}", map);
-    // print map by key
-    let lock = map.lock().await;
-    for (key, value) in lock.iter() {
+    // 打印
+    let lock = map.lock().unwrap();
+    for (key, tag_list) in lock.iter() {
         println!("\n{}:", key);
-        for s in value {
+        for s in tag_list {
             println!("  {}", s);
         }
     }
@@ -91,9 +92,6 @@ async fn main() -> Result<()> {
 }
 
 async fn make_request(
-    // repo: String,
-    // name: String,
-    // count: usize,
     args: Arc<Args>,
     name: String,
     client: Client,
@@ -106,7 +104,7 @@ async fn make_request(
     let full_url = get_full_url(repo, &name);
 
     let res = client
-        .get(full_url)
+        .get(&full_url)
         .header(CONTENT_TYPE, "application/json")
         .send()
         .await?;
@@ -129,13 +127,7 @@ async fn make_request(
                     format!("No.{} ", index + 1)
                 };
 
-                let mut s = format!(
-                    "{:6}: {}/{} {}",
-                    label,
-                    repo,
-                    name,
-                    detail.name,
-                );
+                let mut s = format!("{:6}: {}/{} {}", label, repo, name, detail.name,);
                 if print_time {
                     s = format!(
                         "{}  推送时间：{}",
@@ -149,7 +141,7 @@ async fn make_request(
 
                 label_list.push(s);
             }
-            let mut lock = map.lock().await;
+            let mut lock = map.lock().unwrap();
             lock.insert(name, label_list);
         }
         reqwest::StatusCode::UNAUTHORIZED => {
