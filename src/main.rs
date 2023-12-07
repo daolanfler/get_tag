@@ -9,7 +9,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 /// 获取镜像版本号
 #[derive(Parser, Debug)]
@@ -19,7 +19,7 @@ use clap::Parser;
     long_about = "从 harbor 获取项目的镜像版本号",
     // help_template = "{name} ({version}) by {author} {about} \n\n{usage}"
 )]
-struct Args {
+struct GetTagArgs {
     /// harbor 中仓库的名称
     #[arg(short, long, default_value_t = String::from("smartwater"))]
     repo: String,
@@ -35,7 +35,21 @@ struct Args {
     /// 是否打印推送时间
     #[arg(short, long, default_value_t = false)]
     time: bool,
+
+    /// 打印 harbor API 地址
+    #[command(subcommand)]
+    command: Option<Commands>,
 }
+
+// for subcommand examples
+// https://docs.rs/clap/latest/clap/_derive/_tutorial/chapter_0/index.html
+
+#[derive(Subcommand, Debug)]
+enum Commands{
+    /// 打印 harbor API 地址
+    Harbor
+}
+
 
 error_chain! {
     foreign_links {
@@ -59,8 +73,17 @@ fn get_full_url(repo: &str, name: &str) -> String {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Arc::new(Args::parse());
-    // println!("args: {:#?}", args);
+    let args = Arc::new(GetTagArgs::parse());
+
+    #[cfg(debug_assertions)] println!("args: {:#?}", args);
+
+    match args.command {
+        Some(Commands::Harbor) => {
+            println!("The current harbor API is: {}", HABOR_API_URL);
+            return Ok(());
+        }
+        None => {}
+    }
 
     let map: Arc<Mutex<HashMap<String, Vec<String>>>> = Arc::new(Mutex::new(HashMap::new()));
 
@@ -71,12 +94,13 @@ async fn main() -> Result<()> {
     let mut tasks = Vec::with_capacity(args.names.len());
     for name in args.names.iter() {
         // tokio spawn 的 future 会立即执行
-        tasks.push(tokio::spawn(make_request(
+        let task = tokio::spawn(make_request(
             args.clone(),
             name.clone(),
             client.clone(),
             map.clone(),
-        )));
+        ));
+        tasks.push(task);
     }
 
     for task in tasks {
@@ -99,7 +123,7 @@ async fn main() -> Result<()> {
 }
 
 async fn make_request(
-    args: Arc<Args>,
+    args: Arc<GetTagArgs>,
     name: String,
     client: Client,
     map: Arc<Mutex<HashMap<String, Vec<String>>>>,
