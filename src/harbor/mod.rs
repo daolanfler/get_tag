@@ -17,14 +17,14 @@ pub struct ProjectDetail {
     #[serde(rename = "architecture")]
     architecture: String,
 
-    #[serde(rename = "os")]
-    os: String,
+    // #[serde(rename = "os")]
+    // os: String,
 
-    #[serde(rename = "os.version")]
-    os_version: String,
+    // #[serde(rename = "os.version")]
+    // os_version: String,
 
-    #[serde(rename = "docker_version")]
-    docker_version: String,
+    // #[serde(rename = "docker_version")]
+    // docker_version: String,
 
     #[serde(rename = "author")]
     author: String,
@@ -32,33 +32,15 @@ pub struct ProjectDetail {
     #[serde(rename = "created")]
     created: String,
 
-    #[serde(rename = "config")]
-    config: Config,
-
     #[serde(rename = "immutable")]
     immutable: bool,
 
     #[serde(rename = "signature")]
     signature: Option<serde_json::Value>,
 
-    #[serde(rename = "labels")]
-    labels: Vec<Option<serde_json::Value>>,
-
     #[serde(rename = "push_time")]
     pub push_time: DateTime<Utc>,
 
     #[serde(rename = "pull_time")]
     pull_time: DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Config {
-    #[serde(rename = "labels")]
-    labels: Labels,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Labels {
-    #[serde(rename = "maintainer")]
-    maintainer: String,
 }
