@@ -340,6 +340,7 @@ dependencies = [
  "chrono",
  "clap",
  "error-chain",
+ "lazy_static",
  "reqwest",
  "serde",
  "serde_json",

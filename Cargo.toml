@@ -11,6 +11,7 @@ description = "一个用来获取 docker hub 内部镜像版本号的命令行�
 chrono = { version = "0.4.23", features = ["serde"] }
 clap = { version = "4.0.32", features = ["derive"] }
 error-chain = "0.12.4"
+lazy_static = "1.4.0"
 reqwest = { version = "0.11.13", features = ["blocking", "json"] }
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = { version = "1.0.91" }

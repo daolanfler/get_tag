@@ -11,6 +11,12 @@ use std::{
 };
 use clap::{Parser, Subcommand};
 
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref HABOR_API_URL: Mutex<String> = Mutex::new(String::from("http://10.12.135.233/api"));
+}
+
 /// 获取镜像版本号
 #[derive(Parser, Debug)]
 #[command(
@@ -31,6 +37,10 @@ struct GetTagArgs {
     /// 需要获取的最新多少个版本的镜像
     #[arg(short, long, default_value_t = 1)]
     count: usize,
+
+    /// 指定 harbor_url
+    #[arg(long, default_value_t = String::from(""))]
+    harbor_url: String,
 
     /// 是否打印推送时间
     #[arg(short, long, default_value_t = false)]
@@ -59,12 +69,10 @@ error_chain! {
     }
 }
 
-const HABOR_API_URL: &str = "http://10.12.135.233/api";
-
 fn get_full_url(repo: &str, name: &str) -> String {
     format!(
         "{url}/repositories/{repo}/{name}/tags?detail={detail}",
-        url = HABOR_API_URL,
+        url = HABOR_API_URL.lock().unwrap(),
         repo = repo,
         name = name,
         detail = true
@@ -77,9 +85,13 @@ async fn main() -> Result<()> {
 
     #[cfg(debug_assertions)] println!("args: {:#?}", args);
 
+    if !args.harbor_url.is_empty() {
+        *HABOR_API_URL.lock().unwrap() = args.harbor_url.clone();
+    }
+
     match args.command {
         Some(Commands::Harbor) => {
-            println!("The current harbor API is: {}", HABOR_API_URL);
+            println!("The current harbor API is: {}", HABOR_API_URL.lock().unwrap());
             return Ok(());
         }
         None => {}
