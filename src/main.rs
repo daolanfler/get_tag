@@ -101,6 +101,7 @@ async fn main() -> Result<()> {
 
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
+        .no_proxy()
         .build()?;
 
     let mut tasks = Vec::with_capacity(args.names.len());
@@ -190,8 +191,8 @@ async fn make_request(
         reqwest::StatusCode::UNAUTHORIZED => {
             println!("UNAUTHORIZED");
         }
-        _ => {
-            panic!("出现了未知错误")
+        code => {
+            panic!("出现了未知错误, 状态码: {:?}", code);
         }
     }
     Ok(())
