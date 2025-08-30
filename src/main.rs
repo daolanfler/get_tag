@@ -2,7 +2,7 @@ mod harbor;
 
 use crate::harbor::*;
 use chrono::Local;
-use error_chain::error_chain;
+use thiserror::Error;
 use reqwest::{header::CONTENT_TYPE, Client};
 use std::{
     cmp,
@@ -61,13 +61,18 @@ enum Commands{
 }
 
 
-error_chain! {
-    foreign_links {
-        Io(std::io::Error);
-        HttpRequest(reqwest::Error);
-        JoinError(tokio::task::JoinError);
-    }
+
+#[derive(Error, Debug)]
+pub enum GetTagError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("HTTP request error: {0}")]
+    HttpRequest(#[from] reqwest::Error),
+    #[error("Tokio join error: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
 }
+
+pub type Result<T> = std::result::Result<T, GetTagError>;
 
 fn get_full_url(repo: &str, name: &str) -> String {
     format!(
